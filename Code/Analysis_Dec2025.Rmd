@@ -1,0 +1,837 @@
+---
+title: "Analysis_Jan2025"
+output:
+  pdf_document: default
+  html_document: default
+date: "2025-12-09"
+---
+
+
+
+```{r}
+library(data.table)
+library(dplyr)
+library(ggplot2)
+
+
+```
+
+```{r}
+
+# Change this to the correct path (I'll fix this so people don't have to change this)
+project_path <- "/Users/nencheva/Google Drive/My Drive/MasterFolder/Projects/Active/MB4/MB4 Affect Spin Off"
+
+base_path <- paste0(project_path,"/Data/")
+
+affect_ratings <- data.table(read.csv(paste0(base_path,'affect_ratings_merged_with_marker_id.csv')))
+
+main_data <- data.table(read.csv(paste0(base_path,'clean_data.csv'))) %>% select(lab_id,subj_id,age_days, age_group,condition,cb_order,helper_hinderer_choice,
+       push_up_identity, push_up_order, push_up_side, meet_eligibility)
+
+
+merged_data <- data.table(merge(affect_ratings,main_data, by = c('lab_id','subj_id')))
+
+```
+
+
+```{r}
+
+
+trial_level_affect <- merged_data[
+  ,
+  {
+    # total duration of coded window for this trial
+    total_dur <- 10#sum(duration_sec, na.rm = TRUE)
+
+    # duration (in sec) for positive, negative and any non-neutral
+    non_neutral_dur <- sum(duration_sec[!is.na(affect_rating_segment) &
+                                          affect_rating_segment != 4],
+                           na.rm = TRUE)
+    pos_dur <- sum(duration_sec[!is.na(affect_rating_segment) &
+                                  affect_rating_segment > 4],
+                   na.rm = TRUE)
+    neg_dur <- sum(duration_sec[!is.na(affect_rating_segment) &
+                                  affect_rating_segment < 4],
+                   na.rm = TRUE)
+
+    # centered affect (neutral = 0)
+    affect_centered <- affect_rating_segment - 4
+
+    # duration-weighted affect rating average INCLUDING neutral
+    affect_avg <- if (total_dur > 0) {
+      sum(affect_centered * duration_sec, na.rm = TRUE) / total_dur
+    } else {
+      NA_real_
+    }
+
+    # duration-weighted average EXCLUDING neutral (0s -> NA)
+    affect_avg_nonneutral <- {
+      affect_centered_nz <- fifelse(affect_centered == 0, NA_real_, affect_centered)
+
+      nonneutral_dur <- sum(duration_sec[!is.na(affect_centered_nz)], na.rm = TRUE)
+
+      if (nonneutral_dur > 0) {
+        sum(affect_centered_nz * duration_sec, na.rm = TRUE) / nonneutral_dur
+      } else {
+        NA_real_
+      }
+    }
+    
+    
+    # get first reaction
+    first_idx_any <- {
+      ok <- which(!is.na(segment_start_sec) & !is.na(affect_centered) & !is.na(duration_sec))
+      if (length(ok) == 0) NA_integer_ else ok[which.min(segment_start_sec[ok])]
+    }
+
+    # find first affect reaction
+    first_affect <- if (!is.na(first_idx_any)) affect_centered[first_idx_any] else NA_real_
+
+    
+    
+    
+    # Peak positive / negative ratings within trial (exploratory measure)
+    peak_pos <- {
+      v <- affect_centered[!is.na(affect_centered)]
+      if (length(v) == 0) NA_real_ else max(v)
+    }
+
+    peak_neg <- {
+      v <- affect_centered[!is.na(affect_centered)]
+      if (length(v) == 0) NA_real_ else min(v)
+    }
+
+    # Strongest affect regardless of sign
+    peak_abs <- {
+      v <- affect_centered[!is.na(affect_centered)]
+      if (length(v) == 0) NA_real_ else max(abs(v))
+    }
+
+    peak_signed <- {
+      v <- affect_centered[!is.na(affect_centered)]
+      if (length(v) == 0) {
+        NA_real_
+      } else {
+        v[which.max(abs(v))]   # keeps the sign of the strongest deviation
+      }
+    }
+    
+    
+    
+    
+    # take first values per trial for video-level categorical ratings
+    happiness_val <- first(happiness_full_video)
+    surprise_val  <- first(surprise_full_video)
+
+    .(
+      # keep other trial-level columns (take first value within trial)
+      folder                  = first(folder),
+      file_name               = first(file_name),
+      condition               = first(condition),
+      cb_order                = first(cb_order),
+      helper_hinderer_choice  = first(helper_hinderer_choice),
+      push_up_identity        = first(push_up_identity),
+      push_up_order           = first(push_up_order),
+      push_up_side            = first(push_up_side),
+      meet_eligibility        = first(meet_eligibility),
+
+      #affectPresent_duration: this is the cumulative duration of non-neutral expressions in seconds over the analysis window, this is a continuous variable bound between 0 and 10 seconds. We will sum the duration (in seconds) of all events with Likert score greater than or smaller than 4 (neutral), and divide it by the cumulative duration of all coded events in the coding window for that video. 
+      affectPresent_duration = if (total_dur > 0) non_neutral_dur / total_dur else NA_real_,
+
+      #affectPositive_duration: this is the cumulative duration of positive expressions in seconds over the analysis window, this is a continuous variable bound between 0 and 10 seconds. We will sum the duration (in seconds) of all events with Likert score greater than 4, and divide it by the cumulative duration of all coded events in the coding window for that video.
+      affectPositive_duration = if (total_dur > 0) pos_dur / total_dur else NA_real_,
+
+      #affectNegative_duration: this is the cumulative duration of negative expressions in seconds over the analysis window, this is a continuous variable bound between 0 and 10 seconds. We will sum the duration (in seconds) of all events with Likert score less than 4, and divide it by the cumulative duration of all coded events in the coding window for that video.
+      affectNegative_duration = if (total_dur > 0) neg_dur / total_dur else NA_real_,
+
+      #affect_average: this is the weighted average of the Likert ratings over the analysis window, this is a continuous variable bound between 1 and 7. We will sum the Likert ratings of all events in the analysis window, multiplied by the proportion of the analysis window spanned by the events (the duration of the event in seconds, divided by the duration of the coded window). 
+      affect_average = affect_avg,
+      affect_average_nonneutral = affect_avg_nonneutral,
+      # affect rating of first reaction for the trial (exploratory measure)
+      first_affect = first_affect, 
+      # peak affect rating for the trial (exploratory measure)
+      peak_affect_rating_abs = peak_abs, 
+      peak_affect_rating_signed = peak_signed, 
+      #affectPositive_categoricalChoice: this is the categorical choice affect rating, coded as 1 for positive affect, and 0 for neutral or negative affect
+      affectPositive_categoricalChoice = if (is.na(happiness_val)) NA_integer_ else if (happiness_val == 1) 1L else 0L,
+      #affectNegative_categoricalChoice: this is the categorical choice affect rating, coded as 1 for negative affect, and 0 for neutral or positive affect
+      affectNegative_categoricalChoice = if (is.na(happiness_val)) NA_integer_ else if (happiness_val == 2) 1L else 0L,
+      #surprise_categoricalChoice: this is the categorical choice surprise rating, coded as 1 for surprise present, and 0 for surprise absent (see section 17 for more details)
+      surprise_categoricalChoice = if (is.na(surprise_val)) NA_integer_ else if (surprise_val == 1) 1L else 0L
+    )
+  },
+  by = .(lab_id, subj_id, trial_num)
+]
+
+
+
+# tag push up and push down trials
+trial_level_affect[, trial_num_int := as.integer(trial_num)]
+trial_level_affect[
+  ,
+  is_push_up :=
+    (push_up_order == "first"  & trial_num_int %% 2L == 1L) |
+    (push_up_order == "second" & trial_num_int %% 2L == 0L)
+]
+
+trial_level_affect[
+  ,
+  push_direction := ifelse(is_push_up, "push_up", "push_down")
+]
+trial_level_affect[, trial_num_int := NULL]
+
+
+# Rename variables to align them with preregistered models
+trial_level_affect[, social := factor(condition)]
+trial_level_affect[
+  ,
+  helping := factor(
+    ifelse(is.na(is_push_up), NA_character_,
+           ifelse(is_push_up, "help", "hinder")),
+    levels = c("hinder", "help")
+  )
+]
+trial_level_affect[
+  ,
+  chose_helper := fifelse(
+    helper_hinderer_choice == "helper",   1L,
+    fifelse(helper_hinderer_choice == "hinderer", 0L, NA_integer_)
+  )
+]
+
+```
+
+
+
+```{r}
+library(lmerTest)
+library(papaja)
+
+# affectPresent_duration ~ social + (1 | participant_id) + (1 | lab_id) 
+m_affectPresent_social <- lmer(
+  affectPresent_duration ~ social + (1 | subj_id) + (1 | lab_id),
+  data = trial_level_affect
+)
+
+
+
+
+
+m_affectPresent_social_first2trials <- lmer(
+  affectPresent_duration ~ social + (1 | subj_id) + (1 | lab_id),
+  data = trial_level_affect[trial_num <= 2 ,]
+)
+
+
+p_affectPresent_social <- ggplot(
+  trial_level_affect,
+  aes(x = social, y = affectPresent_duration)
+) +
+  geom_jitter(width = 0.2, height = 0.1, alpha = 0.1,size =0.5) +
+  stat_summary(
+    fun.data = mean_cl_boot,
+    geom = "pointrange",
+    size = 0.2
+  ) +
+  theme_minimal() +
+  labs(
+    x = "Condition",
+    y = "Affect present (duration proportion of trial)"
+  )
+
+
+# affect_average ~ social + (1 | participant_id) + (1 | lab_id)
+m_affectAverage_social <- lmer(
+  affect_average ~ social + (1 | subj_id) + (1 | lab_id),
+  data = trial_level_affect
+)
+
+
+m_affectAverage_social_first2trials <- lmer(
+  affect_average ~ social + (1 | subj_id) + (1 | lab_id),
+  data = trial_level_affect[trial_num <= 2 ,]
+)
+
+
+
+#excluding neutral affect 
+m_affectAverage_social_nonneutral <- lmer(
+  affect_average_nonneutral ~ social + (1 | subj_id) + (1 | lab_id),
+  data = trial_level_affect
+)
+
+
+
+p_affectAverage_social <- ggplot(
+  trial_level_affect,
+  aes(x = social, y = affect_average)
+) +
+  geom_jitter(width = 0.2, height = 0.1, alpha = 0.1,size =0.5) +
+  stat_summary(
+    fun.data = mean_cl_boot,
+    geom = "pointrange",
+    size = 0.2
+  ) +
+  theme_minimal() +
+  labs(
+    x = "Condition",
+    y = "Average affect rating"
+  )
+
+print(paste("affectPresent_duration ~ social:", apa_print(m_affectPresent_social)$full_result$socialsocial))
+
+print(paste("affect_average ~ social:", apa_print(m_affectAverage_social)$full_result$socialsocial))      
+      
+p_affectPresent_social
+p_affectAverage_social
+
+
+```
+
+
+
+```{r}
+
+# affect_average ~ helping*social + (helping | participant_id) + (helping | lab_id)
+m_affectAverage_helping_social <- lmer(
+  affect_average ~ helping * social +
+    (helping | subj_id) +
+    (1 | lab_id),
+  data = trial_level_affect
+)
+
+
+m_affectAverage_helping_social_first2 <- lmer(
+  affect_average ~ helping * social +
+    (1 | subj_id) +
+    (1 | lab_id),
+  data = trial_level_affect[trial_num <= 2,]
+)
+
+
+print("affect_average ~ helping*social:") 
+apa_print(m_affectAverage_helping_social)$table
+
+p_affectAverage_helping <- ggplot(
+  trial_level_affect,
+  aes(x = helping, y = affect_average)
+) +
+  facet_grid(cols = vars(social))+
+  geom_jitter(width = 0.2, height = 0.1, alpha = 0.1,size =0.5) +
+  stat_summary(
+    fun.data = mean_cl_boot,
+    geom = "pointrange",
+    size = 0.2
+  ) +
+  theme_minimal() +
+  labs(
+    x = "Condition",
+    y = "Average affect rating"
+  )
+
+p_affectAverage_helping
+
+# affectPositive_duration ~ helping*social + (helping | participant_id) + (helping | lab_id)
+m_affectPositive_helping_social <- lmer(
+  affectPositive_duration ~ helping * social +
+    (1 | subj_id),
+  data = trial_level_affect
+)
+
+print("affectPositive_duration ~ helping*social:")
+apa_print(m_affectPositive_helping_social)$table
+
+p_affectPositive_helping <- ggplot(
+  trial_level_affect,
+  aes(x = helping, y = affectPositive_duration)
+) +
+  facet_grid(cols = vars(social))+
+  geom_jitter(width = 0.2, height = 0.1, alpha = 0.1,size =0.5) +
+  stat_summary(
+    fun.data = mean_cl_boot,
+    geom = "pointrange",
+    size = 0.2
+  ) +
+  theme_minimal() +
+  labs(
+    x = "Condition",
+    y = "Positive affect duration"
+  )
+
+
+p_affectPositive_helping
+
+# affectNegative_duration ~ helping*social + (helping | participant_id) + (helping | lab_id)  
+m_affectNegative_helping_social <- lmer(
+  affectNegative_duration ~ helping * social +
+    (1 | subj_id) +
+    (1 | lab_id),
+  data = trial_level_affect
+)
+
+
+
+
+
+
+print("affectNegative_duration ~ helping*social:")
+apa_print(m_affectNegative_helping_social)$table
+
+p_affectNegative_helping <- ggplot(
+  trial_level_affect,
+  aes(x = helping, y = affectNegative_duration)
+) +
+  facet_grid(cols = vars(social))+
+  geom_jitter(width = 0.2, height = 0.1, alpha = 0.1,size =0.5) +
+  stat_summary(
+    fun.data = mean_cl_boot,
+    geom = "pointrange",
+    size = 0.2
+  ) +
+  theme_minimal() +
+  labs(
+    x = "Condition",
+    y = "Negative affect duration"
+  )
+
+
+
+p_affectNegative_helping
+
+
+
+
+
+
+
+
+
+
+
+```
+
+
+```{r}
+library(lme4)
+
+# affectPositive_categoricalChoice ~ helping*social + (helping | subj_id) + (helping | lab_id)
+m_affPos_cat_full <- glmer(
+  affectPositive_categoricalChoice ~ helping * social +
+    (1 | subj_id),
+  data   = trial_level_affect,
+  family = binomial
+)
+
+print("affectPositive_categoricalChoice ~ helping*social:") 
+apa_print(m_affPos_cat_full)$table
+
+# affectNegative_categoricalChoice ~ helping*social + (helping | subj_id) + (helping | lab_id)
+m_affNeg_cat_full <- glmer(
+  affectNegative_categoricalChoice ~ helping * social +
+    (1 | subj_id) +
+    (1 | lab_id),
+  data   = trial_level_affect,
+  family = binomial
+)
+
+print("affectNegative_categoricalChoice ~ helping*social:") 
+apa_print(m_affNeg_cat_full)$table
+
+# surprise_categoricalChoice ~ helping*social + (helping | subj_id) + (helping | lab_id)
+m_surprise_cat_final <- glmer(
+  surprise_categoricalChoice ~ helping*social +
+    (1 | subj_id),
+  data   = trial_level_affect,
+  family = binomial,
+  control = glmerControl(optimizer = "bobyqa")
+)
+
+print("surprise_categoricalChoice ~ helping*social:")
+apa_print(m_surprise_cat_final)$table
+
+```
+
+
+
+```{r}
+
+# chose_helper ~affect_average*helping + (affect_average*helping | participant_id) + (affect_average*helping | lab_id)
+m_choseHelper_affectAverage_helping <- glmer(
+  chose_helper ~ affect_average * helping +
+    (1 | subj_id) +
+    (1 | lab_id),
+  data   = trial_level_affect,
+  family = binomial
+)
+
+print("chose_helper ~affect_average*helping:") 
+apa_print(m_choseHelper_affectAverage_helping)$table
+
+
+# chose_helper ~affectPositive_duration*helping + (affectPositive_duration*helping | participant_id) + (affectPositive_duration*helping | lab_id)
+m_choseHelper_affectPositive_helping <- glmer(
+  chose_helper ~ affectPositive_duration * helping +
+    (1 | subj_id) +
+    (1 | lab_id),
+  data   = trial_level_affect,
+  family = binomial
+)
+
+print("chose_helper ~affectPositive_duration*helping:")
+apa_print(m_choseHelper_affectPositive_helping)$table            
+
+
+
+#chose_helper ~affectNegative_duration*helping + (affectNegative_duration*helping | participant_id) + (affectNegative_duration*helping | lab_id)
+m_choseHelper_affectNegative_helping <- glmer(
+  chose_helper ~ affectNegative_duration * helping +
+    (1 | subj_id) +
+    (1 | lab_id),
+  data   = trial_level_affect,
+  family = binomial
+)
+
+print("chose_helper ~affectNegative_duration*helping:")
+apa_print(m_choseHelper_affectNegative_helping)$table
+
+
+```
+
+```{r}
+library(lme4)
+
+# chose_helper ~ positive_categoricalChoice*helping + (positive_categoricalChoice*helping | subj_id) + (positive_categoricalChoice*helping | lab_id)
+m_choseHelper_posChoice_full <- glmer(
+  chose_helper ~ affectPositive_categoricalChoice * helping +
+    (1 | subj_id) +
+    (1 | lab_id),
+  data   = trial_level_affect,
+  family = binomial
+)
+
+print("chose_helper ~ positive_categoricalChoice*helping:")
+apa_print(m_choseHelper_posChoice_full)$table
+
+# chose_helper ~ negative_categoricalChoice*helping + (negative_categoricalChoice*helping | subj_id) + (negative_categoricalChoice*helping | lab_id)
+m_choseHelper_negChoice_full <- glmer(
+  chose_helper ~ affectNegative_categoricalChoice * helping +
+    (1 | subj_id) +
+    (1 | lab_id),
+  data   = trial_level_affect,
+  family = binomial
+)
+print("chose_helper ~ negative_categoricalChoice*helping:")
+apa_print(m_choseHelper_negChoice_full)$table
+
+# chose_helper ~ surprise_categoricalChoice*helping + (surprise_categoricalChoice*helping | subj_id) + (surprise_categoricalChoice*helping | lab_id)
+m_choseHelper_surpriseChoice_full <- glmer(
+  chose_helper ~ surprise_categoricalChoice * helping +
+    (1 | subj_id) +
+    (1 | lab_id),
+  data   = trial_level_affect,
+  family = binomial
+)
+
+print("chose_helper ~ surprise_categoricalChoice*helping:")
+apa_print(m_choseHelper_surpriseChoice_full)$table
+
+```
+
+
+
+```{r}
+library(data.table)
+setDT(merged_data)
+
+# Exclude rows where start or end time is NA
+merged_clean <- merged_data[
+  !is.na(segment_start_sec) & !is.na(segment_end_sec)
+]
+
+# Expand into 1 Hz time series
+time_series_data <- merged_clean[
+  ,
+  {
+    # turn onset and offset into integers
+    start_sec <- floor(segment_start_sec)
+    end_sec   <- ceiling(segment_end_sec)
+
+    # generate one row per second
+    seconds <- seq(start_sec, end_sec, by = 1)
+
+    data.table(
+      time_sec = seconds,
+      affect_rating_segment = affect_rating_segment,
+      lab_id = lab_id,
+      subj_id = subj_id,
+      folder = folder,
+      file_name = file_name,
+      segment_start_sec = segment_start_sec,
+      segment_end_sec = segment_end_sec,
+      duration_sec = duration_sec,
+      duration_msec = duration_msec,
+      happiness_full_video = happiness_full_video,
+      surprise_full_video = surprise_full_video,
+      trial_num = trial_num,
+      age_days = age_days,
+      age_group = age_group,
+      condition = condition,
+      cb_order = cb_order,
+      helper_hinderer_choice = helper_hinderer_choice,
+      push_up_identity = push_up_identity,
+      push_up_order = push_up_order,
+      push_up_side = push_up_side,
+      meet_eligibility = meet_eligibility
+    )
+  },
+  by = .I
+]
+
+
+time_series_data[, trial_num_int := as.integer(trial_num)]
+time_series_data[
+  ,
+  is_push_up :=
+    (push_up_order == "first"  & trial_num_int %% 2L == 1L) |
+    (push_up_order == "second" & trial_num_int %% 2L == 0L)
+]
+time_series_data[
+  ,
+  helping := factor(
+    ifelse(is.na(is_push_up), NA_character_,
+           ifelse(is_push_up, "help", "hinder")),
+    levels = c("hinder", "help")
+  )
+]
+
+time_series_data[
+  ,
+  affect_rating_centered := affect_rating_segment - mean(affect_rating_segment, na.rm = TRUE),
+  by = subj_id
+]
+
+p_time_affect <- ggplot(
+  time_series_data,
+  aes(x = time_sec, y = affect_rating_segment, color = helping)
+) +
+  #geom_jitter(alpha = 0.3, size = 1) +
+  geom_smooth(
+    method = "loess",
+    se = TRUE,
+    aes(fill = helping),
+    alpha = 0.2
+  ) +
+  facet_grid(rows = vars(condition)) +
+  theme_minimal() +
+  labs(
+    x = "Time (sec)",
+    y = "Affect rating (Likert)",
+    color = "Helping condition",
+    fill  = "Helping condition"
+  )
+
+p_time_affect
+
+```
+
+
+```{r}
+library(data.table)
+setDT(merged_data)
+
+# Exclude rows where start or end time is NA
+merged_clean <- merged_data[
+  !is.na(segment_start_sec) & !is.na(segment_end_sec)
+]
+
+# Expand into 1 Hz time series
+time_series_data <- merged_clean[
+  ,
+  {
+    # turn onset and offset into integers
+    start_sec <- floor(segment_start_sec)
+    end_sec   <- ceiling(segment_end_sec)
+
+    # generate one row per second
+    seconds <- seq(start_sec, end_sec, by = 1)
+
+    data.table(
+      time_sec = seconds,
+      affect_rating_segment = affect_rating_segment,
+
+      # Neutral-centered affect (neutral=0). Original scale: 1..7 with 4 = neutral
+      affect_c0 = affect_rating_segment - 4,
+
+      # Mark each timepoint as 1/0 for proportion measures
+      # (mean of these 0/1 variables within a time bin = proportion)
+      nonneutral_01 = fifelse(is.na(affect_rating_segment), NA_real_,
+                              as.numeric((affect_rating_segment - 4) != 0)),
+      pos_01        = fifelse(is.na(affect_rating_segment), NA_real_,
+                              as.numeric((affect_rating_segment - 4) > 0)),
+      neg_01        = fifelse(is.na(affect_rating_segment), NA_real_,
+                              as.numeric((affect_rating_segment - 4) < 0)),
+
+      lab_id = lab_id,
+      subj_id = subj_id,
+      folder = folder,
+      file_name = file_name,
+      segment_start_sec = segment_start_sec,
+      segment_end_sec = segment_end_sec,
+      duration_sec = duration_sec,
+      duration_msec = duration_msec,
+      happiness_full_video = happiness_full_video,
+      surprise_full_video = surprise_full_video,
+      trial_num = trial_num,
+      age_days = age_days,
+      age_group = age_group,
+      condition = condition,
+      cb_order = cb_order,
+      helper_hinderer_choice = helper_hinderer_choice,
+      push_up_identity = push_up_identity,
+      push_up_order = push_up_order,
+      push_up_side = push_up_side,
+      meet_eligibility = meet_eligibility
+    )
+  },
+  by = .I
+]
+
+time_series_data[, trial_num_int := as.integer(trial_num)]
+time_series_data[
+  ,
+  is_push_up :=
+    (push_up_order == "first"  & trial_num_int %% 2L == 1L) |
+    (push_up_order == "second" & trial_num_int %% 2L == 0L)
+]
+time_series_data[
+  ,
+  helping := factor(
+    ifelse(is.na(is_push_up), NA_character_,
+           ifelse(is_push_up, "help", "hinder")),
+    levels = c("hinder", "help")
+  )
+]
+
+# Summarize into 1s bins to get time course measures:
+# - Avg rating (centered; neutral=0)
+# - Proportion not neutral (non-zero)
+# - Proportion positive / negative
+timecourse_1s <- time_series_data[
+  ,
+  .(
+    avg_rating_c0   = mean(affect_c0, na.rm = TRUE),
+    prop_nonneutral = mean(nonneutral_01, na.rm = TRUE),
+    prop_pos        = mean(pos_01, na.rm = TRUE),
+    prop_neg        = mean(neg_01, na.rm = TRUE),
+    n_obs           = sum(!is.na(affect_c0))
+  ),
+  by = .(condition, helping, time_sec)
+]
+
+# Plot average affect rating over time (centered; 0 = neutral)
+p_time_affect_avg <- ggplot(
+  timecourse_1s,
+  aes(x = time_sec, y = avg_rating_c0, color = helping)
+) +
+  #geom_jitter(alpha = 0.3, size = 1) +
+  geom_smooth(
+    method = "loess",
+    se = TRUE,
+    aes(fill = helping),
+    alpha = 0.2
+  ) +
+  facet_grid(rows = vars(condition)) +
+  theme_minimal() +
+  labs(
+    x = "Time (sec)",
+    y = "Average affect rating (centered; 0 = neutral)",
+    color = "Helping condition",
+    fill  = "Helping condition"
+  )
+
+# Plot proportion non-neutral over time
+p_time_affect_prop_nonneutral <- ggplot(
+  timecourse_1s,
+  aes(x = time_sec, y = prop_nonneutral, color = helping)
+) +
+  #geom_jitter(alpha = 0.3, size = 1) +
+  geom_smooth(
+    method = "loess",
+    se = TRUE,
+    aes(fill = helping),
+    alpha = 0.2
+  ) +
+  facet_grid(rows = vars(condition)) +
+  theme_minimal() +
+  labs(
+    x = "Time (sec)",
+    y = "Proportion non-neutral",
+    color = "Helping condition",
+    fill  = "Helping condition"
+  )
+
+# Plot proportion positive over time
+p_time_affect_prop_pos <- ggplot(
+  timecourse_1s,
+  aes(x = time_sec, y = prop_pos, color = helping)
+) +
+  #geom_jitter(alpha = 0.3, size = 1) +
+  geom_smooth(
+    method = "loess",
+    se = TRUE,
+    aes(fill = helping),
+    alpha = 0.2
+  ) +
+  facet_grid(rows = vars(condition)) +
+  theme_minimal() +
+  labs(
+    x = "Time (sec)",
+    y = "Proportion positive",
+    color = "Helping condition",
+    fill  = "Helping condition"
+  )
+
+# Plot proportion negative over time
+p_time_affect_prop_neg <- ggplot(
+  timecourse_1s,
+  aes(x = time_sec, y = prop_neg, color = helping)
+) +
+  #geom_jitter(alpha = 0.3, size = 1) +
+  geom_smooth(
+    method = "loess",
+    se = TRUE,
+    aes(fill = helping),
+    alpha = 0.2
+  ) +
+  facet_grid(rows = vars(condition)) +
+  theme_minimal() +
+  labs(
+    x = "Time (sec)",
+    y = "Proportion negative",
+    color = "Helping condition",
+    fill  = "Helping condition"
+  )
+
+# Print plots
+p_time_affect_avg
+p_time_affect_prop_nonneutral
+p_time_affect_prop_pos
+p_time_affect_prop_neg
+
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
