@@ -19,7 +19,7 @@ library(ggplot2)
 ```{r}
 
 # Change this to the correct path (I'll fix this so people don't have to change this)
-project_path <- "/Users/nencheva/Google Drive/My Drive/MasterFolder/Projects/Active/MB4/MB4 Affect Spin Off"
+project_path <- "/Users/nencheva/Google Drive/My Drive/MasterFolder/Projects/Active/MB4/MB4 Affect Spin Off/mb4_emotion_analysis/"
 
 base_path <- paste0(project_path,"/Data/")
 
