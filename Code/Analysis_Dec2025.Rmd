@@ -10,22 +10,19 @@ date: "2025-12-09"
 
 ```{r}
 library(data.table)
-library(dplyr)
+library(tidyverse)
 library(ggplot2)
+library(here)
 
 
 ```
 
 ```{r}
+# Reproducible file reading
+affect_ratings <- data.table(read_csv(here("Data", "affect_ratings_merged_with_marker_id.csv")))
 
-# Change this to the correct path (I'll fix this so people don't have to change this)
-project_path <- "/Users/nencheva/Google Drive/My Drive/MasterFolder/Projects/Active/MB4/MB4 Affect Spin Off/mb4_emotion_analysis/"
-
-base_path <- paste0(project_path,"/Data/")
-
-affect_ratings <- data.table(read.csv(paste0(base_path,'affect_ratings_merged_with_marker_id.csv')))
-
-main_data <- data.table(read.csv(paste0(base_path,'clean_data.csv'))) %>% select(lab_id,subj_id,age_days, age_group,condition,cb_order,helper_hinderer_choice,
+main_data <- data.table(read_csv(here("Data", "clean_data.csv"))) %>% 
+  select(lab_id,subj_id,age_days, age_group,condition,cb_order,helper_hinderer_choice,
        push_up_identity, push_up_order, push_up_side, meet_eligibility)
 
 
