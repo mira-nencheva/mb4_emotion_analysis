@@ -1,5 +1,5 @@
 ---
-title: "Analysis_Jan2025"
+title: "Analysis_Jan2025_results_writeup"
 output:
   pdf_document: default
   html_document: default
@@ -16,6 +16,8 @@ library(here)
 
 
 ```
+
+
 
 ```{r}
 # Reproducible file reading
@@ -175,7 +177,7 @@ trial_level_affect[
   ,
   push_direction := ifelse(is_push_up, "push_up", "push_down")
 ]
-trial_level_affect[, trial_num_int := NULL]
+
 
 
 # Rename variables to align them with preregistered models
@@ -188,6 +190,8 @@ trial_level_affect[
     levels = c("hinder", "help")
   )
 ]
+
+
 trial_level_affect[
   ,
   chose_helper := fifelse(
@@ -195,6 +199,8 @@ trial_level_affect[
     fifelse(helper_hinderer_choice == "hinderer", 0L, NA_integer_)
   )
 ]
+
+
 
 ```
 
@@ -275,17 +281,26 @@ p_affectAverage_social <- ggplot(
     y = "Average affect rating"
   )
 
-print(paste("affectPresent_duration ~ social:", apa_print(m_affectPresent_social)$full_result$socialsocial))
+apa_m_affectPresent_social <- apa_print(m_affectPresent_social)
+apa_m_affectAverage_social <- apa_print(m_affectAverage_social)
+apa_m_affectAverage_social_nonneutral <- apa_print(m_affectAverage_social_nonneutral)
 
-print(paste("affect_average ~ social:", apa_print(m_affectAverage_social)$full_result$socialsocial))      
+#print(paste("affectPresent_duration ~ social:", apa_m_affectPresent_social$full_result$socialsocial))
+
+#print(paste("affect_average ~ social:", apa_m_affectAverage_social$full_result$socialsocial))      
       
-p_affectPresent_social
-p_affectAverage_social
 
 
 ```
 
+## Social versus non-social condition
 
+First, we tested whether emotional expressions differed between the social and the non-social condition. There was no significant difference in the overall duration of emotion displays (positive or negative) between the social vs nonsocial condition (`affectPresent_duration ~ social + (1 | subj_id) + (1 | lab_id)`: `r apa_m_affectPresent_social$full_result$socialsocial`). Similarly, we did not find evidence that emotional expressions were more positive in the social than the non-social condition (`affect_average ~ social + (1 | subj_id) + (1 | lab_id)`: `r apa_m_affectAverage_social$full_result$socialsocial`), or that they were less neutral (`affect_average_nonneutral ~ social + (1 | subj_id) + (1 | lab_id)`:`r apa_m_affectAverage_social_nonneutral$full_result$socialsocial`). Together these results suggest that infants displayed similar emotions in the social and non-social conditions. 
+
+```{r fig-social-sidebyside, fig.cap="Emotion duration (left) and average affect (right) by social condition", fig.width=8, fig.height=4}
+library(patchwork)
+p_affectPresent_social + p_affectAverage_social
+```
 
 ```{r}
 
@@ -306,8 +321,10 @@ m_affectAverage_helping_social_first2 <- lmer(
 )
 
 
+apa_m_affectAverage_helping_social <- apa_print(m_affectAverage_helping_social)
+
 print("affect_average ~ helping*social:") 
-apa_print(m_affectAverage_helping_social)$table
+apa_m_affectAverage_helping_social$table
 
 p_affectAverage_helping <- ggplot(
   trial_level_affect,
@@ -326,7 +343,7 @@ p_affectAverage_helping <- ggplot(
     y = "Average affect rating"
   )
 
-p_affectAverage_helping
+
 
 # affectPositive_duration ~ helping*social + (helping | participant_id) + (helping | lab_id)
 m_affectPositive_helping_social <- lmer(
@@ -335,8 +352,10 @@ m_affectPositive_helping_social <- lmer(
   data = trial_level_affect
 )
 
+apa_m_affectPositive_helping_social <- apa_print(m_affectPositive_helping_social)
+
 print("affectPositive_duration ~ helping*social:")
-apa_print(m_affectPositive_helping_social)$table
+apa_m_affectPositive_helping_social$table
 
 p_affectPositive_helping <- ggplot(
   trial_level_affect,
@@ -356,7 +375,7 @@ p_affectPositive_helping <- ggplot(
   )
 
 
-p_affectPositive_helping
+
 
 # affectNegative_duration ~ helping*social + (helping | participant_id) + (helping | lab_id)  
 m_affectNegative_helping_social <- lmer(
@@ -371,8 +390,10 @@ m_affectNegative_helping_social <- lmer(
 
 
 
+apa_m_affectNegative_helping_social <- apa_print(m_affectNegative_helping_social)
+
 print("affectNegative_duration ~ helping*social:")
-apa_print(m_affectNegative_helping_social)$table
+apa_m_affectNegative_helping_social$table
 
 p_affectNegative_helping <- ggplot(
   trial_level_affect,
@@ -392,8 +413,6 @@ p_affectNegative_helping <- ggplot(
   )
 
 
-
-p_affectNegative_helping
 
 
 
@@ -419,8 +438,9 @@ m_affPos_cat_full <- glmer(
   family = binomial
 )
 
-print("affectPositive_categoricalChoice ~ helping*social:") 
-apa_print(m_affPos_cat_full)$table
+apa_m_affPos_cat_full <- apa_print(m_affPos_cat_full)
+
+
 
 # affectNegative_categoricalChoice ~ helping*social + (helping | subj_id) + (helping | lab_id)
 m_affNeg_cat_full <- glmer(
@@ -431,8 +451,7 @@ m_affNeg_cat_full <- glmer(
   family = binomial
 )
 
-print("affectNegative_categoricalChoice ~ helping*social:") 
-apa_print(m_affNeg_cat_full)$table
+apa_m_affNeg_cat_full <- apa_print(m_affNeg_cat_full)
 
 # surprise_categoricalChoice ~ helping*social + (helping | subj_id) + (helping | lab_id)
 m_surprise_cat_final <- glmer(
@@ -442,12 +461,32 @@ m_surprise_cat_final <- glmer(
   family = binomial,
   control = glmerControl(optimizer = "bobyqa")
 )
+apa_m_surprise_cat_final <- apa_print(m_surprise_cat_final)
 
-print("surprise_categoricalChoice ~ helping*social:")
-apa_print(m_surprise_cat_final)$table
 
 ```
+## Emotion as a function of helping and social context
 
+To examine how emotion displays varied as a function of helping and social context, we fit linear mixed-effects models predicting trial-level emotion measures from helping condition, social context, and their interaction.
+
+We first tested whether average emotion ratings were more positive for the social, helping condition (`affect_average ~ helping * social + (helping | subj_id) + (1 | lab_id)`). Emotion displays were more positive (or less negative) for the helping conditions (`r apa_m_affectAverage_helping_social$full_result$helpinghelp`). However, there was no significant effect of social vs. non-social condition (`r apa_m_affectAverage_helping_social$full_result$socialsocial`), and no significant interaction between whether the condition was the social and whether it displayed a helping interaction (`r apa_m_affectAverage_helping_social$full_result$helpinghelp_socialsocial`). We conducted a follow-up analysis restricted to the first two trials per participant, which yielded a comparable pattern of results.
+
+Next, we tested whether the duration of positive emotion displays was longer in the social, helping condition (`affectPositive_duration ~ helping * social + (1 | subj_id)`). There was no significant effect of helping (`r apa_m_affectPositive_helping_social$full_result$helpinghelp`), social (`r apa_m_affectPositive_helping_social$full_result$socialsocial`), or their interaction (`r apa_m_affectPositive_helping_social$full_result$helpinghelp_socialsocial`) on the duration of positive emotion displays.
+
+Finally, we examined how the duration of negative emotion displays differed across conditions (`affectNegative_duration ~ helping * social + (1 | subj_id) + (1 | lab_id)`). Displays of negative emotion had shorter duration in the helping conditions (`r apa_m_affectNegative_helping_social$full_result$helpinghelp`), and there was a sigificant interaction, such that this effect was weaker for the social condition (`r apa_m_affectNegative_helping_social$full_result$helpinghelp_socialsocial`). As before, there was no main effect of social vs non-social condition (`r apa_m_affectNegative_helping_social$full_result$socialsocial`).
+
+```{r fig-helping-affect, fig.cap="Caregiver affect as a function of helping condition (average affect, positive duration, negative duration)", fig.width=10, fig.height=4}
+library(patchwork)
+
+p_affectAverage_helping +
+p_affectPositive_helping +
+p_affectNegative_helping
+```
+
+In addition to examining contunuous effects of condition on the avreage emotion display rating or the duration of emotion displays, we also fit models predicting the overall presence of positive, negative and surprised emotion displays by condition.
+There was no significant effect of helping (`r apa_m_affPos_cat_full$full_result$helpinghelp`), social (`r apa_m_affPos_cat_full$full_result$socialsocial`) condition, or their interaction (`r apa_m_affPos_cat_full$full_result$helpinghelp_socialsocial`) on the presence of positive emotion displays (`affectPositive_categoricalChoice ~ helping * social + (1 | subj_id)`). Similarly, there was no significant effect of helping (`r apa_m_affNeg_cat_full$full_result$helpinghelp`), social (`r apa_m_affNeg_cat_full$full_result$socialsocial`), or their interaction (`r apa_m_affNeg_cat_full$full_result$helpinghelp_socialsocial`) on the presence of negative emotion displays (`affectNegative_categoricalChoice ~ helping * social + (1 | subj_id) + (1 | lab_id)`). The presence of a surprisal response (`surprise_categoricalChoice ~ helping * social + (1 | subj_id)`) was also unaffected by the helping (`r apa_m_surprise_cat_final$full_result$helpinghelp`) and social (`r apa_m_surprise_cat_final$full_result$socialsocial`) conditions or their interaction (`r apa_m_surprise_cat_final$full_result$helpinghelp_socialsocial`). 
+
+Overall, there results suggest that although the presense and duration of positive emotion displays was not shaped by the experimental conditions, participants' emotion displays were more negative in their overall magnitude and in the duration of negative displays during the hindering conditions.  
 
 
 ```{r}
@@ -461,8 +500,10 @@ m_choseHelper_affectAverage_helping <- glmer(
   family = binomial
 )
 
-print("chose_helper ~affect_average*helping:") 
-apa_print(m_choseHelper_affectAverage_helping)$table
+apa_m_choseHelper_affectAverage_helping <- apa_print(m_choseHelper_affectAverage_helping)
+
+#print("chose_helper ~affect_average*helping:") 
+#apa_m_choseHelper_affectAverage_helping$table
 
 
 # chose_helper ~affectPositive_duration*helping + (affectPositive_duration*helping | participant_id) + (affectPositive_duration*helping | lab_id)
@@ -474,8 +515,10 @@ m_choseHelper_affectPositive_helping <- glmer(
   family = binomial
 )
 
-print("chose_helper ~affectPositive_duration*helping:")
-apa_print(m_choseHelper_affectPositive_helping)$table            
+apa_m_choseHelper_affectPositive_helping <- apa_print(m_choseHelper_affectPositive_helping)
+
+#print("chose_helper ~affectPositive_duration*helping:")
+#apa_m_choseHelper_affectPositive_helping$table            
 
 
 
@@ -488,11 +531,17 @@ m_choseHelper_affectNegative_helping <- glmer(
   family = binomial
 )
 
-print("chose_helper ~affectNegative_duration*helping:")
-apa_print(m_choseHelper_affectNegative_helping)$table
+apa_m_choseHelper_affectNegative_helping <- apa_print(m_choseHelper_affectNegative_helping)
+
+#print("chose_helper ~affectNegative_duration*helping:")
+#apa_m_choseHelper_affectNegative_helping$table
 
 
 ```
+
+
+
+
 
 ```{r}
 library(lme4)
@@ -506,8 +555,10 @@ m_choseHelper_posChoice_full <- glmer(
   family = binomial
 )
 
-print("chose_helper ~ positive_categoricalChoice*helping:")
-apa_print(m_choseHelper_posChoice_full)$table
+apa_m_choseHelper_posChoice_full <- apa_print(m_choseHelper_posChoice_full)
+
+#print("chose_helper ~ positive_categoricalChoice*helping:")
+#apa_m_choseHelper_posChoice_full$table
 
 # chose_helper ~ negative_categoricalChoice*helping + (negative_categoricalChoice*helping | subj_id) + (negative_categoricalChoice*helping | lab_id)
 m_choseHelper_negChoice_full <- glmer(
@@ -517,8 +568,10 @@ m_choseHelper_negChoice_full <- glmer(
   data   = trial_level_affect,
   family = binomial
 )
-print("chose_helper ~ negative_categoricalChoice*helping:")
-apa_print(m_choseHelper_negChoice_full)$table
+apa_m_choseHelper_negChoice_full <- apa_print(m_choseHelper_negChoice_full)
+
+#print("chose_helper ~ negative_categoricalChoice*helping:")
+#apa_m_choseHelper_negChoice_full$table
 
 # chose_helper ~ surprise_categoricalChoice*helping + (surprise_categoricalChoice*helping | subj_id) + (surprise_categoricalChoice*helping | lab_id)
 m_choseHelper_surpriseChoice_full <- glmer(
@@ -529,12 +582,25 @@ m_choseHelper_surpriseChoice_full <- glmer(
   family = binomial
 )
 
-print("chose_helper ~ surprise_categoricalChoice*helping:")
-apa_print(m_choseHelper_surpriseChoice_full)$table
+apa_m_choseHelper_surpriseChoice_full <- apa_print(m_choseHelper_surpriseChoice_full)
+
+#print("chose_helper ~ surprise_categoricalChoice*helping:")
+#apa_m_choseHelper_surpriseChoice_full$table
 
 ```
 
+## Do emotion displays predict choice?
 
+To evaluate the prediction that infants’ emotional reactions during the habituation events would predict reaching choice, we fit logistic mixed-effects models with infants' choice of the helper (vs. the hinderer) toy at the end of the study as the outcome. Specifically, we tested whether infants who showed more positive, more negative, or more extreme average affect during a given trial type were more likely to choose the helper. There was no significant effect of the average emotion display rating during habituation (`r apa_m_choseHelper_affectAverage_helping$full_result$affect_average`), or its interaction with the helping condition (`r apa_m_choseHelper_affectAverage_helping$full_result$affect_average_helpinghelp`) on the infant's choice of character (`chose_helper ~ affect_average * helping + (1 | subj_id) + (1 | lab_id)`). Similarly, infants' character choice (`chose_helper ~ affectPositive_duration * helping + (1 | subj_id) + (1 | lab_id)`) was not shaped by the duration of positive affect (`r apa_m_choseHelper_affectPositive_helping$full_result$affectPositive_duration`) or its interaction with condition (`r apa_m_choseHelper_affectPositive_helping$full_result$affectPositive_duration_helpinghelp`). This was also no effect of negative affect duration (`r apa_m_choseHelper_affectNegative_helping$full_result$affectNegative_duration`), or its interaction with condition (`r apa_m_choseHelper_affectNegative_helping$full_result$affectNegative_duration_helpinghelp`) on character choice (`chose_helper ~ affectNegative_duration * helping + (1 | subj_id) + (1 | lab_id)`).
+
+Next, we tested whether the overall presence of positive affect, negative affect, or surprise, coded as a categorical choice, during helping versus hindering trials shaped whether infants were more likely to choose the helper (`chose_helper ~ [emotion categorical coding] * helping + (1 | subj_id) + (1 | lab_id)`). As with the continuous analyses, we found no effect of negative affect (`r apa_m_choseHelper_negChoice_full$full_result$affectNegative_categoricalChoice`) or its interaction with condition (apa_m_choseHelper_negChoice_full$full_result$affectNegative_categoricalChoice_helpinghelp), and no effect of positive affect (`r apa_m_choseHelper_posChoice_full$full_result$affectPositive_categoricalChoice`), or its interaction with condition (`r apa_m_choseHelper_posChoice_full$full_result$affectPositive_categoricalChoice_helpinghelp`). Finally, there was no effect of the presence of a surprisal response on choice (`r apa_m_choseHelper_surpriseChoice_full$full_result$surprise_categoricalChoice`), or its interaction with condition (`r apa_m_choseHelper_surpriseChoice_full$full_result$surprise_categoricalChoice_helpinghelp`)
+
+
+
+
+## Exploratory time-course analyses
+
+In an exploratory analysis, we examined the time course of emotion displays by transforming the event-level coding into a 1 Hz time series. 
 
 ```{r}
 library(data.table)
